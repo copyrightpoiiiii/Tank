@@ -814,7 +814,7 @@ void find_enemy_move(int tank)
 			}
 		}
 	}
-	enemy_tank[tank] = enemy_tank[tank];
+	predict_enemy_tank[tank] = enemy_tank[tank];
 }
 
 void update_info()
@@ -942,6 +942,7 @@ TankGame::Action MyAction(int side, int tank)
 	if (TankGame::field->ActionIsValid(side, tank, TankGame::LeftShoot))
 	{ //检测是否可以进行攻击
 		TankGame::Action rec = attack(side, tank);
+		//cout<<predict_enemy_tank[0].first<<" "<<predict_enemy_tank[0].second<<endl;
 		//cout<<rec<<endl;
 		if (rec != TankGame::Invalid)
 			return rec;
@@ -949,7 +950,7 @@ TankGame::Action MyAction(int side, int tank)
 	//auto act=(TankGame::Stay);
 	std::pair<int, int> tank_position = my_tank[tank];
 	std::pair<int, int> target = choose_moving_target(tank_position, TankGame::field->mySide);
-	//ßcout << target.first << " " << target.second << endl;
+	//cout << target.first << " " << target.second << endl;
 	if (target == tank_position)
 	{ //说明坦克已经到达最后目标，只需要朝着对方基地射击即可
 		if (tank_position.second < 4)
