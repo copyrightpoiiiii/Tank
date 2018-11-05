@@ -692,7 +692,8 @@ std::pair<int, int> predict_enemy_tank[2];
 
 bool update_safty(TankGame::FieldItem item, int x, int y, int add)
 { //判断一个格子是否可以被坦克火力覆盖到
-	//add=1 被敌方坦克打到 add=2 被我方坦克打到
+	//add=2 被敌方坦克打到 add=3 被我方坦克打到
+	//一个敌方坦克 2 两个敌方坦克 4 一个敌方一个我方 5 一个我方 3
 	switch (item)
 	{
 	case TankGame::None:
@@ -705,7 +706,7 @@ bool update_safty(TankGame::FieldItem item, int x, int y, int add)
 		return 1;
 	case TankGame::Base:
 		safty_block[x][y] += add;
-		break;
+		return 1;
 	default:
 		safty_block[x][y] += add;
 		return 0;
@@ -728,7 +729,7 @@ void update_distance()
 					continue;
 				if (TankGame::field->gameField[tmpy][tmpx] == TankGame::Brick)
 					dis[i][j][tmpy][tmpx] = 2; //砖块需要两个回合
-				else if (TankGame::field->gameField[tmpy][tmpx] == TankGame::None)
+				else
 					dis[i][j][tmpy][tmpx] = 1; //其他需要一个回合
 			}
 		}
@@ -865,7 +866,7 @@ void update_info()
 	else
 		predict_enemy_tank[1] = enemy_tank[1];
 	//预处理出对方坦克的火力范围和我方坦克的火力范围
-	//1为敌人火力，2为我方火力，3为同时覆盖
+	//2为敌人火力，3为我方火力
 	for (int j = 0; j < 2; j++)
 	{
 		if (!alive[enemy_side][j])
@@ -873,19 +874,19 @@ void update_info()
 		if (!TankGame::field->ActionIsValid(enemy_side, j, TankGame::LeftShoot))
 			continue;
 		for (int i = enemy_tank[j].first + 1; i < 9; i++)
-			if (update_safty(TankGame::field->gameField[i][enemy_tank[j].second], i, enemy_tank[j].second, 1))
+			if (update_safty(TankGame::field->gameField[i][enemy_tank[j].second], i, enemy_tank[j].second, 2))
 				break;
 
 		for (int i = enemy_tank[j].first - 1; i >= 0; i--)
-			if (update_safty(TankGame::field->gameField[i][enemy_tank[j].second], i, enemy_tank[j].second, 1))
+			if (update_safty(TankGame::field->gameField[i][enemy_tank[j].second], i, enemy_tank[j].second, 2))
 				break;
 
 		for (int i = enemy_tank[j].second + 1; i < 9; i++)
-			if (update_safty(TankGame::field->gameField[enemy_tank[j].first][i], enemy_tank[j].first, i, 1))
+			if (update_safty(TankGame::field->gameField[enemy_tank[j].first][i], enemy_tank[j].first, i, 2))
 				break;
 
 		for (int i = enemy_tank[j].second - 1; i >= 0; i--)
-			if (update_safty(TankGame::field->gameField[enemy_tank[j].first][i], enemy_tank[j].first, i, 1))
+			if (update_safty(TankGame::field->gameField[enemy_tank[j].first][i], enemy_tank[j].first, i, 2))
 				break;
 	}
 	for (int j = 0; j < 2; j++)
@@ -895,19 +896,19 @@ void update_info()
 		if (!TankGame::field->ActionIsValid(TankGame::field->mySide, j, TankGame::LeftShoot))
 			continue;
 		for (int i = my_tank[j].first + 1; i < 9; i++)
-			if (update_safty(TankGame::field->gameField[i][my_tank[j].second], i, my_tank[j].second, 2))
+			if (update_safty(TankGame::field->gameField[i][my_tank[j].second], i, my_tank[j].second, 3))
 				break;
 
 		for (int i = my_tank[j].first - 1; i >= 0; i--)
-			if (update_safty(TankGame::field->gameField[i][my_tank[j].second], i, my_tank[j].second, 2))
+			if (update_safty(TankGame::field->gameField[i][my_tank[j].second], i, my_tank[j].second, 3))
 				break;
 
 		for (int i = my_tank[j].second + 1; i < 9; i++)
-			if (update_safty(TankGame::field->gameField[my_tank[j].first][i], my_tank[j].first, i, 2))
+			if (update_safty(TankGame::field->gameField[my_tank[j].first][i], my_tank[j].first, i, 3))
 				break;
 
 		for (int i = my_tank[j].second - 1; i >= 0; i--)
-			if (update_safty(TankGame::field->gameField[my_tank[j].first][i], my_tank[j].first, i, 2))
+			if (update_safty(TankGame::field->gameField[my_tank[j].first][i], my_tank[j].first, i, 3))
 				break;
 	}
 }
@@ -959,31 +960,63 @@ TankGame::Action check_brick_between_two_tank(std::pair<int, int> my_tank, std::
 	return TankGame::Invalid;
 }
 
+bool is_none_between_two_point(std::pair<int, int> a, std::pair<int, int> b)
+{
+	if (check_brick_between_two_tank(a, b) == TankGame::Invalid)
+		return 0;
+	if (a.first == b.first)
+	{
+		for (int i = std::min(a.second, b.second) + 1; i < std::max(a.second, b.second); i++)
+			if (TankGame::field->gameField[a.first][i] != TankGame::None)
+				return 0;
+	}
+	else
+	{
+		for (int i = std::min(a.first, b.first) + 1; i < std::max(a.first, b.first); i++)
+			if (TankGame::field->gameField[i][a.second] != TankGame::None)
+				return 0;
+	}
+	return 1;
+}
+
 TankGame::Action attack(int side, int tank)
 {
 	//对于敌方的第一个坦克的当前位置
-	if (safty_block[enemy_tank[0].first][enemy_tank[0].second] >= 2 && alive[enemy_side][0])
+	if ((safty_block[enemy_tank[0].first][enemy_tank[0].second] == 3 || safty_block[enemy_tank[0].first][enemy_tank[0].second] > 4) && alive[enemy_side][0] && is_none_between_two_point(enemy_tank[0], my_tank[tank]))
 		return check_brick_between_two_tank(my_tank[tank], enemy_tank[0]);
 	//对于敌方的第二个坦克的当前位置
-	if (safty_block[enemy_tank[1].first][enemy_tank[1].second] >= 2 && alive[enemy_side][1])
+	if ((safty_block[enemy_tank[1].first][enemy_tank[1].second] == 3 || safty_block[enemy_tank[1].first][enemy_tank[1].second] > 4) && alive[enemy_side][1] && is_none_between_two_point(enemy_tank[1], my_tank[tank]))
 		return check_brick_between_two_tank(my_tank[tank], enemy_tank[1]);
 	//对于敌方的第一个坦克的预测位置
-	if (safty_block[predict_enemy_tank[0].first][predict_enemy_tank[0].second] >= 2 && alive[enemy_side][0])
+	if ((safty_block[predict_enemy_tank[0].first][predict_enemy_tank[0].second] == 3 || safty_block[predict_enemy_tank[0].first][predict_enemy_tank[0].second] > 4) && alive[enemy_side][0] && is_none_between_two_point(predict_enemy_tank[0], my_tank[tank]))
 		return check_brick_between_two_tank(my_tank[tank], predict_enemy_tank[0]);
 	//对于敌方的第二个坦克的预测位置
-	if (safty_block[predict_enemy_tank[1].first][predict_enemy_tank[1].second] >= 2 && alive[enemy_side][1])
+	if ((safty_block[predict_enemy_tank[1].first][predict_enemy_tank[1].second] == 3 || safty_block[predict_enemy_tank[1].first][predict_enemy_tank[1].second] > 4) && alive[enemy_side][1] && is_none_between_two_point(predict_enemy_tank[1], my_tank[tank]))
 		return check_brick_between_two_tank(my_tank[tank], predict_enemy_tank[1]);
 	return TankGame::Invalid;
 }
 
 bool is_position_safe(std::pair<int, int> pos)
 {
-	if (safty_block[pos.first][pos.second] == 1)
+	//2 1个敌方坦克
+	//4 2个敌方坦克
+	//5 1个敌方坦克 1个我方坦克
+	//7 2敌方 1我方
+	//8 1敌方 2我方
+	//10 2敌方 2我方
+	if (safty_block[pos.first][pos.second] == 2)
 		return 0;
-	else if (safty_block[pos.first][pos.second] == 3)
+	if (safty_block[pos.first][pos.second] == 4)
 		return 0;
-	else
-		return 1;
+	if (safty_block[pos.first][pos.second] == 5)
+		return 0;
+	if (safty_block[pos.first][pos.second] == 7)
+		return 0;
+	if (safty_block[pos.first][pos.second] == 8)
+		return 0;
+	if (safty_block[pos.first][pos.second] == 10)
+		return 0;
+	return 1;
 }
 
 bool is_position_safe_pro(std::pair<int, int> pos, std::pair<int, int> my_tank)
@@ -1002,10 +1035,16 @@ bool is_position_safe_pro(std::pair<int, int> pos, std::pair<int, int> my_tank)
 			return 0;
 		if (tmp == enemy_tank[1])
 			return 0;
-		if (tmp == predict_enemy_tank[0])
-			return 0;
-		if (tmp == predict_enemy_tank[1])
-			return 0;
+		//防止我方开了墙之后，对手正好移动过来，然后gg的局面
+		for (int k = 0; k < 4; k++)
+		{
+			int tmpy = tmp.first + TankGame::dy[k], tmpx = tmp.second + TankGame::dx[k];
+			std::pair<int, int> next_position = std::make_pair(tmpy, tmpx);
+			if (next_position == enemy_tank[0])
+				return 0;
+			if (next_position == enemy_tank[1])
+				return 0;
+		}
 		if (TankGame::field->gameField[tmp.first][tmp.second] != TankGame::None)
 			return 1;
 		tmp.first += abs_i;
@@ -1015,7 +1054,7 @@ bool is_position_safe_pro(std::pair<int, int> pos, std::pair<int, int> my_tank)
 }
 
 TankGame::Action Final_Action(int side, int tank, std::pair<int, int> tank_position)
-{   //当坦克到达底线，战斗即将结束
+{ //当坦克到达底线，战斗即将结束
 	//需要判断是否会被对手打到
 	if (!is_position_safe(tank_position))
 	{
@@ -1036,6 +1075,22 @@ TankGame::Action Final_Action(int side, int tank, std::pair<int, int> tank_posit
 				}
 			}
 		//否则确保自身安全，朝对手坦克开炮
+		if (tank_position.second < 4)
+		{
+			for (int i = tank_position.second + 1; i <= 4; i++)
+				if (TankGame::field->gameField[tank_position.first][i] == TankGame::Base)
+					return TankGame::field->ActionIsValid(side, tank, TankGame::RightShoot) ? TankGame::RightShoot : TankGame::Stay;
+				else if (TankGame::field->gameField[tank_position.first][i] != TankGame::None)
+					break;
+		}
+		else
+		{
+			for (int i = tank_position.second - 1; i >= 4; i--)
+				if (TankGame::field->gameField[tank_position.first][i] == TankGame::Base)
+					return TankGame::field->ActionIsValid(side, tank, TankGame::LeftShoot) ? TankGame::LeftShoot : TankGame::Stay;
+				else if (TankGame::field->gameField[tank_position.first][i] != TankGame::None)
+					break;
+		}
 		if (TankGame::field->ActionIsValid(side, tank, TankGame::LeftShoot))
 		{ //检测是否可以进行攻击
 			TankGame::Action rec = attack(side, tank);
@@ -1051,6 +1106,34 @@ TankGame::Action Final_Action(int side, int tank, std::pair<int, int> tank_posit
 	{
 		return TankGame::field->ActionIsValid(side, tank, TankGame::LeftShoot) ? TankGame::LeftShoot : TankGame::Stay;
 	}
+}
+
+TankGame::Action continue_life(std::pair<int, int> my_position, std::pair<int, int> target)
+{
+	//续一秒！
+	int max_dis = dis[my_position.first][my_position.second][target.first][target.second], move_id = -1;
+	for (int k = 0; k < 4; k++)
+	{
+		int tmpy = my_position.first + TankGame::dy[k], tmpx = my_position.second + TankGame::dx[k];
+		if (!TankGame::CoordValid(tmpx, tmpy))
+			continue;
+		if (TankGame::field->gameField[tmpy][tmpx] == TankGame::Steel)
+			continue;
+		if (!is_position_safe(std::make_pair(tmpy, tmpx)))
+			continue;
+		if (TankGame::field->gameField[tmpy][tmpx] == TankGame::None)
+		{
+			if (dis[tmpy][tmpx][target.first][target.second] <= max_dis)
+			{
+				max_dis = dis[tmpy][tmpx][target.first][target.second];
+				move_id = k;
+			}
+		}
+	}
+	if (move_id != -1)
+		return choose_move_direction(move_id);
+	else
+		return TankGame::Invalid;
 }
 
 TankGame::Action MyAction(int side, int tank)
@@ -1081,6 +1164,13 @@ TankGame::Action MyAction(int side, int tank)
 				if (judge_right_path(target, tank_position, std::make_pair(tmpy, tmpx)))
 					return choose_move_direction(k);
 			}
+		}
+		//如果当前格子是危险的,朝四周躲避
+		if (!is_position_safe(tank_position))
+		{
+			TankGame::Action rec = continue_life(tank_position, target);
+			if (rec != TankGame::Invalid)
+				return rec;
 		}
 		if (TankGame::field->ActionIsValid(side, tank, TankGame::LeftShoot))
 		{ //检测是否可以进行攻击
